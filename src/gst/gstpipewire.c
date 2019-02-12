@@ -41,6 +41,11 @@
 #include "gstpipewiresink.h"
 #include "gstpipewiredeviceprovider.h"
 
+#if defined(__GNUC__)
+# undef GST_PLUGIN_EXPORT
+# define GST_PLUGIN_EXPORT __attribute__ ((visibility ("default")))
+#endif
+
 GST_DEBUG_CATEGORY (pipewire_debug);
 
 static gboolean
