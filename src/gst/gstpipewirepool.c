@@ -109,6 +109,9 @@ void gst_pipewire_pool_wrap_buffer (GstPipeWirePool *pool, struct pw_buffer *b)
       gst_buffer_append_memory (buf, gmem);
   }
 
+  /* clear the memory modification tag */
+  GST_BUFFER_FLAG_UNSET (buf, GST_BUFFER_FLAG_TAG_MEMORY);
+
   data->pool = gst_object_ref (pool);
   data->owner = NULL;
   data->header = spa_buffer_find_meta_data (b->buffer, SPA_META_Header, sizeof(*data->header));
@@ -209,6 +212,28 @@ static void
 release_buffer (GstBufferPool * pool, GstBuffer *buffer)
 {
   GST_DEBUG ("release buffer %p", buffer);
+
+  /* memory should be untouched */
+  if (G_UNLIKELY (GST_BUFFER_FLAG_IS_SET (buffer, GST_BUFFER_FLAG_TAG_MEMORY)))
+    goto discard;
+
+  /* all memory should be exclusive to this buffer (and thus be writable) */
+  if (G_UNLIKELY (!gst_buffer_is_all_memory_writable (buffer)))
+    goto discard;
+
+  return;
+
+discard:
+  {
+    GstPipeWirePoolData *data = gst_pipewire_pool_get_data (buffer);
+    struct pw_buffer *b = data->b;
+
+    GST_WARNING_OBJECT (pool,
+        "buffer %p has been modified too much; re-wrapping", buffer);
+    gst_buffer_unref (buffer);
+    gst_pipewire_pool_wrap_buffer (GST_PIPEWIRE_POOL (pool), b);
+    return;
+  }
 }
 
 static gboolean
