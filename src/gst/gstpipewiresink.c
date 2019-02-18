@@ -772,9 +772,6 @@ gst_pipewire_sink_close (GstPipeWireSink * pwsink)
   const char *error = NULL;
 
   pw_thread_loop_lock (pwsink->main_loop);
-  if (pwsink->stream) {
-    pw_stream_disconnect (pwsink->stream);
-  }
   if (pwsink->remote) {
     pw_remote_disconnect (pwsink->remote);
 
@@ -793,11 +790,6 @@ gst_pipewire_sink_close (GstPipeWireSink * pwsink)
   pw_thread_loop_unlock (pwsink->main_loop);
 
   pw_thread_loop_stop (pwsink->main_loop);
-
-  if (pwsink->stream) {
-    pw_stream_destroy (pwsink->stream);
-    pwsink->stream = NULL;
-  }
 
   if (pwsink->remote) {
     pw_remote_destroy (pwsink->remote);
