@@ -413,8 +413,10 @@ on_remove_buffer (void *_data, struct pw_buffer *b)
 
   GST_LOG_OBJECT (pwsink, "remove buffer");
 
+  /* first return the buffer to the pool */
   if (g_queue_remove (&pwsink->queue, data->buf))
     gst_buffer_unref (data->buf);
+  /* then remove it from the pool */
   gst_buffer_unref (data->buf);
 }
 
@@ -454,6 +456,9 @@ do_send_buffer (GstPipeWireSink *pwsink)
     pw_thread_loop_signal (pwsink->main_loop, FALSE);
   } else
     pwsink->need_ready--;
+
+  /* release the buffer to the pool */
+  gst_buffer_unref (buffer);
 }
 
 
