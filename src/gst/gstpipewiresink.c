@@ -319,7 +319,7 @@ gst_pipewire_sink_sink_fixate (GstBaseSink * bsink, GstCaps * caps)
       gst_structure_set (structure, "interlace-mode", G_TYPE_STRING,
           "progressive", NULL);
   } else if (gst_structure_has_name (structure, "audio/x-raw")) {
-    gst_structure_fixate_field_string (structure, "format", "S16LE");
+    gst_structure_fixate_field_string (structure, "format", "F32LE");
     gst_structure_fixate_field_nearest_int (structure, "channels", 2);
     gst_structure_fixate_field_nearest_int (structure, "rate", 44100);
   }
