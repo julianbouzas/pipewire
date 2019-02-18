@@ -575,7 +575,7 @@ gst_pipewire_sink_setcaps (GstBaseSink * bsink, GstCaps * caps)
     if (pwsink->mode != GST_PIPEWIRE_SINK_MODE_PROVIDE)
       flags |= PW_STREAM_FLAG_AUTOCONNECT;
     else
-      flags |= PW_STREAM_FLAG_DRIVER;
+      flags |= PW_STREAM_FLAG_DRIVER | PW_STREAM_FLAG_AUTOCONNECT;
 
     pw_stream_connect (pwsink->stream,
                           PW_DIRECTION_OUTPUT,
