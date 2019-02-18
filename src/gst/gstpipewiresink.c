@@ -44,6 +44,7 @@
 #include <sys/socket.h>
 
 #include "gstpipewireformat.h"
+#include <gst/audio/audio.h>
 
 GST_DEBUG_CATEGORY_STATIC (pipewire_sink_debug);
 #define GST_CAT_DEFAULT pipewire_sink_debug
@@ -134,7 +135,7 @@ gst_pipewire_sink_propose_allocation (GstBaseSink * bsink, GstQuery * query)
 {
   GstPipeWireSink *pwsink = GST_PIPEWIRE_SINK (bsink);
 
-  gst_query_add_allocation_pool (query, GST_BUFFER_POOL_CAST (pwsink->pool), 0, 0, 0);
+  gst_query_add_allocation_pool (query, GST_BUFFER_POOL_CAST (pwsink->pool), 1024, 16, 0);
   return TRUE;
 }
 
@@ -219,6 +220,7 @@ gst_pipewire_sink_class_init (GstPipeWireSinkClass * klass)
       "PipeWire Sink");
 }
 
+#if 0
 static void
 pool_activated (GstPipeWirePool *pool, GstPipeWireSink *sink)
 {
@@ -264,6 +266,7 @@ pool_activated (GstPipeWirePool *pool, GstPipeWireSink *sink)
   pw_stream_finish_format (sink->stream, 0, port_params, 2);
   pw_thread_loop_unlock (sink->main_loop);
 }
+#endif
 
 static void
 gst_pipewire_sink_init (GstPipeWireSink * sink)
@@ -273,7 +276,7 @@ gst_pipewire_sink_init (GstPipeWireSink * sink)
   sink->mode = DEFAULT_PROP_MODE;
   sink->fd = -1;
 
-  g_signal_connect (sink->pool, "activated", G_CALLBACK (pool_activated), sink);
+  // g_signal_connect (sink->pool, "activated", G_CALLBACK (pool_activated), sink);
 
   g_queue_init (&sink->queue);
 
@@ -507,8 +510,44 @@ on_format_changed (void *data, const struct spa_pod *format)
 {
   GstPipeWireSink *pwsink = data;
 
-  if (gst_buffer_pool_is_active (GST_BUFFER_POOL_CAST (pwsink->pool)))
-    pool_activated (pwsink->pool, pwsink);
+  // if (gst_buffer_pool_is_active (GST_BUFFER_POOL_CAST (pwsink->pool)))
+  //   pool_activated (pwsink->pool, pwsink);
+
+  if (format) {
+    const struct spa_pod *params[2];
+    struct spa_pod_builder b = { NULL };
+    uint8_t buffer[512];
+    GstCaps *caps;
+    GstAudioInfo info;
+    int buf_size;
+
+    if (!(caps = gst_caps_from_format (format)))
+      return;
+    if (!gst_audio_info_from_caps (&info, caps)) {
+      gst_caps_unref (caps);
+      return;
+    }
+    gst_caps_unref (caps);
+
+    buf_size = 1024 * GST_AUDIO_INFO_BPF(&info);
+
+    spa_pod_builder_init (&b, buffer, sizeof (buffer));
+    params[0] = spa_pod_builder_add_object (&b,
+        SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers,
+        SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(16, 16, INT32_MAX),
+        SPA_PARAM_BUFFERS_blocks,  SPA_POD_CHOICE_RANGE_Int(1, 1, INT32_MAX),
+        SPA_PARAM_BUFFERS_size,    SPA_POD_CHOICE_RANGE_Int(buf_size, buf_size, INT32_MAX),
+        SPA_PARAM_BUFFERS_stride,  SPA_POD_CHOICE_RANGE_Int(0, 0, INT32_MAX),
+        SPA_PARAM_BUFFERS_align,   SPA_POD_Int(16));
+
+    params[1] = spa_pod_builder_add_object (&b,
+        SPA_TYPE_OBJECT_ParamMeta, SPA_PARAM_Meta,
+        SPA_PARAM_META_type, SPA_POD_Id(SPA_META_Header),
+        SPA_PARAM_META_size, SPA_POD_Int(sizeof (struct spa_meta_header)));
+
+    GST_DEBUG_OBJECT (pwsink, "doing finish format");
+    pw_stream_finish_format (pwsink->stream, 0, params, 2);
+  }
 }
 
 static gboolean
