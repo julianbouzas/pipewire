@@ -631,10 +631,15 @@ gst_pipewire_sink_render (GstBaseSink * bsink, GstBuffer * buffer)
 
   if (buffer->pool != GST_BUFFER_POOL_CAST (pwsink->pool)) {
     GstBuffer *b = NULL;
+    GstBufferPool *bpool = GST_BUFFER_POOL_CAST (pwsink->pool);
     GstMapInfo info = { 0, };
 
-    if (!gst_buffer_pool_is_active (GST_BUFFER_POOL_CAST (pwsink->pool)))
+    if (!gst_buffer_pool_is_active (bpool)) {
+      GstStructure *config = gst_buffer_pool_get_config(bpool);
+      gst_buffer_pool_config_set_params (config, NULL, 0, 16, 0);
+      gst_buffer_pool_set_config(bpool, config);
       gst_buffer_pool_set_active (GST_BUFFER_POOL_CAST (pwsink->pool), TRUE);
+    }
 
     if ((res = gst_buffer_pool_acquire_buffer (GST_BUFFER_POOL_CAST (pwsink->pool), &b, NULL)) != GST_FLOW_OK)
       goto done;
