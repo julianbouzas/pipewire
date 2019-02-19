@@ -40,6 +40,7 @@
 #include "gstpipewiresrc.h"
 #include "gstpipewiresink.h"
 #include "gstpipewiredeviceprovider.h"
+#include "gstpwaudiosink.h"
 
 #if defined(__GNUC__)
 # undef GST_PLUGIN_EXPORT
@@ -57,12 +58,14 @@ plugin_init (GstPlugin *plugin)
       GST_TYPE_PIPEWIRE_SRC);
   gst_element_register (plugin, "pipewiresink", GST_RANK_NONE,
       GST_TYPE_PIPEWIRE_SINK);
+  gst_element_register (plugin, "pwaudiosink", GST_RANK_NONE,
+      GST_TYPE_PW_AUDIO_SINK);
 
   if (!gst_device_provider_register (plugin, "pipewiredeviceprovider",
        GST_RANK_PRIMARY + 1, GST_TYPE_PIPEWIRE_DEVICE_PROVIDER))
     return FALSE;
 
-  GST_DEBUG_CATEGORY_INIT (pipewire_debug, "pipewire", 0, "PipeWirie elements");
+  GST_DEBUG_CATEGORY_INIT (pipewire_debug, "pipewire", 0, "PipeWire elements");
 
   return TRUE;
 }
