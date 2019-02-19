@@ -60,7 +60,7 @@ gst_pipewire_clock_get_internal_time (GstClock * clock)
       t.rate.denom == 0)
     return pclock->last_time;
 
-  result = gst_util_uint64_scale_int (t.ticks, GST_SECOND * t.rate.num, t.rate.denom);
+  result = gst_util_uint64_scale (t.ticks, GST_SECOND * t.rate.num, t.rate.denom);
   clock_gettime(CLOCK_MONOTONIC, &ts);
   result += SPA_TIMESPEC_TO_NSEC(&ts) - t.now;
 
