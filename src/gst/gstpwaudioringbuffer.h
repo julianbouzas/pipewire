@@ -24,23 +24,53 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __GST_PW_AUDIO_SINK_H__
-#define __GST_PW_AUDIO_SINK_H__
+#ifndef __GST_PW_AUDIO_RING_BUFFER_H__
+#define __GST_PW_AUDIO_RING_BUFFER_H__
 
-#include "gstpwaudioringbuffer.h"
+#include <gst/gst.h>
+#include <gst/audio/audio.h>
+#include <pipewire/pipewire.h>
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_PW_AUDIO_SINK \
-    (gst_pw_audio_sink_get_type ())
+#define GST_TYPE_PW_AUDIO_RING_BUFFER \
+    (gst_pw_audio_ring_buffer_get_type ())
 
-G_DECLARE_FINAL_TYPE(GstPwAudioSink, gst_pw_audio_sink,
-                     GST, PW_AUDIO_SINK, GstAudioBaseSink);
+G_DECLARE_FINAL_TYPE(GstPwAudioRingBuffer, gst_pw_audio_ring_buffer,
+                     GST, PW_AUDIO_RING_BUFFER, GstAudioRingBuffer);
 
-struct _GstPwAudioSink
+typedef struct _GstPwAudioRingBufferProps GstPwAudioRingBufferProps;
+
+struct _GstPwAudioRingBuffer
 {
-  GstAudioBaseSink parent;
-  GstPwAudioRingBufferProps props;
+  GstAudioRingBuffer parent;
+
+  /* properties */
+  GstElement *elem;
+  enum pw_direction direction;
+  GstPwAudioRingBufferProps *props;
+
+  /* internal */
+  struct pw_loop *loop;
+  struct pw_thread_loop *main_loop;
+
+  struct pw_core *core;
+  struct pw_remote *remote;
+  struct spa_hook remote_listener;
+
+  struct pw_stream *stream;
+  struct spa_hook stream_listener;
+
+  gint segsize;
+  gint bpf;
+};
+
+struct _GstPwAudioRingBufferProps
+{
+  gchar *path;
+  gchar *client_name;
+  GstStructure *properties;
+  int fd;
 };
 
 G_END_DECLS

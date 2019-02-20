@@ -24,22 +24,22 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef __GST_PW_AUDIO_SINK_H__
-#define __GST_PW_AUDIO_SINK_H__
+#ifndef __GST_PW_AUDIO_SRC_H__
+#define __GST_PW_AUDIO_SRC_H__
 
 #include "gstpwaudioringbuffer.h"
 
 G_BEGIN_DECLS
 
-#define GST_TYPE_PW_AUDIO_SINK \
-    (gst_pw_audio_sink_get_type ())
+#define GST_TYPE_PW_AUDIO_SRC \
+    (gst_pw_audio_src_get_type ())
 
-G_DECLARE_FINAL_TYPE(GstPwAudioSink, gst_pw_audio_sink,
-                     GST, PW_AUDIO_SINK, GstAudioBaseSink);
+G_DECLARE_FINAL_TYPE(GstPwAudioSrc, gst_pw_audio_src,
+                     GST, PW_AUDIO_SRC, GstAudioBaseSrc);
 
-struct _GstPwAudioSink
+struct _GstPwAudioSrc
 {
-  GstAudioBaseSink parent;
+  GstAudioBaseSrc parent;
   GstPwAudioRingBufferProps props;
 };
 

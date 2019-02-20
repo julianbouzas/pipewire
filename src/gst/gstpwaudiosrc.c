@@ -28,12 +28,12 @@
 #include "config.h"
 #endif
 
-#include "gstpwaudiosink.h"
+#include "gstpwaudiosrc.h"
 
-GST_DEBUG_CATEGORY_STATIC (pw_audio_sink_debug);
-#define GST_CAT_DEFAULT pw_audio_sink_debug
+GST_DEBUG_CATEGORY_STATIC (pw_audio_src_debug);
+#define GST_CAT_DEFAULT pw_audio_src_debug
 
-G_DEFINE_TYPE (GstPwAudioSink, gst_pw_audio_sink, GST_TYPE_AUDIO_BASE_SINK);
+G_DEFINE_TYPE (GstPwAudioSrc, gst_pw_audio_src, GST_TYPE_AUDIO_BASE_SRC);
 
 enum
 {
@@ -44,9 +44,9 @@ enum
   PROP_FD
 };
 
-static GstStaticPadTemplate gst_pw_audio_sink_template =
-GST_STATIC_PAD_TEMPLATE ("sink",
-    GST_PAD_SINK,
+static GstStaticPadTemplate gst_pw_audio_src_template =
+GST_STATIC_PAD_TEMPLATE ("src",
+    GST_PAD_SRC,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS (GST_AUDIO_CAPS_MAKE (GST_AUDIO_NE (F32))
                      ", layout = (string)\"interleaved\"")
@@ -54,48 +54,48 @@ GST_STATIC_PAD_TEMPLATE ("sink",
 
 
 static void
-gst_pw_audio_sink_init (GstPwAudioSink * self)
+gst_pw_audio_src_init (GstPwAudioSrc * self)
 {
   self->props.fd = -1;
 }
 
 static void
-gst_pw_audio_sink_finalize (GObject * object)
+gst_pw_audio_src_finalize (GObject * object)
 {
-  GstPwAudioSink *pwsink = GST_PW_AUDIO_SINK (object);
+  GstPwAudioSrc *self = GST_PW_AUDIO_SRC (object);
 
-  g_free (pwsink->props.path);
-  g_free (pwsink->props.client_name);
-  if (pwsink->props.properties)
-    gst_structure_free (pwsink->props.properties);
+  g_free (self->props.path);
+  g_free (self->props.client_name);
+  if (self->props.properties)
+    gst_structure_free (self->props.properties);
 }
 
 static void
-gst_pw_audio_sink_set_property (GObject * object, guint prop_id,
+gst_pw_audio_src_set_property (GObject * object, guint prop_id,
     const GValue * value, GParamSpec * pspec)
 {
-  GstPwAudioSink *pwsink = GST_PW_AUDIO_SINK (object);
+  GstPwAudioSrc *self = GST_PW_AUDIO_SRC (object);
 
   switch (prop_id) {
     case PROP_PATH:
-      g_free (pwsink->props.path);
-      pwsink->props.path = g_value_dup_string (value);
+      g_free (self->props.path);
+      self->props.path = g_value_dup_string (value);
       break;
 
     case PROP_CLIENT_NAME:
-      g_free (pwsink->props.client_name);
-      pwsink->props.client_name = g_value_dup_string (value);
+      g_free (self->props.client_name);
+      self->props.client_name = g_value_dup_string (value);
       break;
 
     case PROP_STREAM_PROPERTIES:
-      if (pwsink->props.properties)
-        gst_structure_free (pwsink->props.properties);
-      pwsink->props.properties =
+      if (self->props.properties)
+        gst_structure_free (self->props.properties);
+      self->props.properties =
           gst_structure_copy (gst_value_get_structure (value));
       break;
 
     case PROP_FD:
-      pwsink->props.fd = g_value_get_int (value);
+      self->props.fd = g_value_get_int (value);
       break;
 
     default:
@@ -105,26 +105,26 @@ gst_pw_audio_sink_set_property (GObject * object, guint prop_id,
 }
 
 static void
-gst_pw_audio_sink_get_property (GObject * object, guint prop_id,
+gst_pw_audio_src_get_property (GObject * object, guint prop_id,
     GValue * value, GParamSpec * pspec)
 {
-  GstPwAudioSink *pwsink = GST_PW_AUDIO_SINK (object);
+  GstPwAudioSrc *self = GST_PW_AUDIO_SRC (object);
 
   switch (prop_id) {
     case PROP_PATH:
-      g_value_set_string (value, pwsink->props.path);
+      g_value_set_string (value, self->props.path);
       break;
 
     case PROP_CLIENT_NAME:
-      g_value_set_string (value, pwsink->props.client_name);
+      g_value_set_string (value, self->props.client_name);
       break;
 
     case PROP_STREAM_PROPERTIES:
-      gst_value_set_structure (value, pwsink->props.properties);
+      gst_value_set_structure (value, self->props.properties);
       break;
 
     case PROP_FD:
-      g_value_set_int (value, pwsink->props.fd);
+      g_value_set_int (value, self->props.fd);
       break;
 
     default:
@@ -134,15 +134,15 @@ gst_pw_audio_sink_get_property (GObject * object, guint prop_id,
 }
 
 static GstAudioRingBuffer *
-gst_pw_audio_sink_create_ringbuffer (GstAudioBaseSink * sink)
+gst_pw_audio_src_create_ringbuffer (GstAudioBaseSrc * sink)
 {
-  GstPwAudioSink *self = GST_PW_AUDIO_SINK (sink);
+  GstPwAudioSrc *self = GST_PW_AUDIO_SRC (sink);
   GstAudioRingBuffer *buffer;
 
   GST_DEBUG_OBJECT (sink, "creating ringbuffer");
   buffer = g_object_new (GST_TYPE_PW_AUDIO_RING_BUFFER,
       "element", sink,
-      "direction", PW_DIRECTION_OUTPUT,
+      "direction", PW_DIRECTION_INPUT,
       "props", &self->props,
       NULL);
   GST_DEBUG_OBJECT (sink, "created ringbuffer @%p", buffer);
@@ -151,21 +151,21 @@ gst_pw_audio_sink_create_ringbuffer (GstAudioBaseSink * sink)
 }
 
 static void
-gst_pw_audio_sink_class_init (GstPwAudioSinkClass * klass)
+gst_pw_audio_src_class_init (GstPwAudioSrcClass * klass)
 {
   GObjectClass *gobject_class;
   GstElementClass *gstelement_class;
-  GstAudioBaseSinkClass *gstaudiobsink_class;
+  GstAudioBaseSrcClass *gstaudiobsrc_class;
 
   gobject_class = (GObjectClass *) klass;
   gstelement_class = (GstElementClass *) klass;
-  gstaudiobsink_class = (GstAudioBaseSinkClass *) klass;
+  gstaudiobsrc_class = (GstAudioBaseSrcClass *) klass;
 
-  gobject_class->finalize = gst_pw_audio_sink_finalize;
-  gobject_class->set_property = gst_pw_audio_sink_set_property;
-  gobject_class->get_property = gst_pw_audio_sink_get_property;
+  gobject_class->finalize = gst_pw_audio_src_finalize;
+  gobject_class->set_property = gst_pw_audio_src_set_property;
+  gobject_class->get_property = gst_pw_audio_src_get_property;
 
-  gstaudiobsink_class->create_ringbuffer = gst_pw_audio_sink_create_ringbuffer;
+  gstaudiobsrc_class->create_ringbuffer = gst_pw_audio_src_create_ringbuffer;
 
   g_object_class_install_property (gobject_class, PROP_PATH,
       g_param_spec_string ("path", "Path",
@@ -187,14 +187,14 @@ gst_pw_audio_sink_class_init (GstPwAudioSinkClass * klass)
           G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS));
 
   gst_element_class_set_static_metadata (gstelement_class,
-      "PipeWire Audio sink", "Sink/Audio",
-      "Send audio to PipeWire",
+      "PipeWire Audio source", "Source/Audio",
+      "Receive audio from PipeWire",
       "George Kiagiadakis <george.kiagiadakis@collabora.com>");
 
   gst_element_class_add_pad_template (gstelement_class,
-      gst_static_pad_template_get (&gst_pw_audio_sink_template));
+      gst_static_pad_template_get (&gst_pw_audio_src_template));
 
-  GST_DEBUG_CATEGORY_INIT (pw_audio_sink_debug, "pwaudiosink", 0,
-      "PipeWire Audio Sink");
+  GST_DEBUG_CATEGORY_INIT (pw_audio_src_debug, "pwaudiosrc", 0,
+      "PipeWire Audio Src");
 }
 
