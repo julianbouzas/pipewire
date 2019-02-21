@@ -63,6 +63,11 @@ struct _GstPwAudioRingBuffer
 
   gint segsize;
   gint bpf;
+  gint rate;
+
+  /* on_stream_process() state */
+  gint segoffset;
+  gint cur_segment;
 };
 
 struct _GstPwAudioRingBufferProps

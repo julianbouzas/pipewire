@@ -250,7 +250,7 @@ on_stream_format_changed (void *data, const struct spa_pod *format)
   spa_pod_builder_init (&b, buffer, sizeof (buffer));
   params[0] = spa_pod_builder_add_object (&b,
       SPA_TYPE_OBJECT_ParamBuffers, SPA_PARAM_Buffers,
-      SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(2, 1, INT32_MAX),
+      SPA_PARAM_BUFFERS_buffers, SPA_POD_CHOICE_RANGE_Int(16, 1, INT32_MAX),
       SPA_PARAM_BUFFERS_blocks,  SPA_POD_Int(1),
       SPA_PARAM_BUFFERS_size,    SPA_POD_Int(self->segsize),
       SPA_PARAM_BUFFERS_stride,  SPA_POD_Int(self->bpf),
@@ -267,42 +267,80 @@ on_stream_process (void *data)
   GstAudioRingBuffer *buf = GST_AUDIO_RING_BUFFER (data);
   struct pw_buffer *b;
   struct spa_data *d;
-  gint segment;
-  guint8 *ringptr;
-  gint len;
+  gint size;       /*< size to read/write from/to the spa buffer */
+  gint offset;     /*< offset to read/write from/to in the spa buffer */
+  gint segment;    /*< the current segment number in the ringbuffer */
+  guint8 *ringptr; /*< pointer to the beginning of the current segment */
+  gint segsize;    /*< the size of one segment in the ringbuffer */
+  gint copy_size;  /*< the bytes to copy in one memcpy() invocation */
+  gint remain;     /*< remainder of bytes available in the spa buffer */
 
   if (g_atomic_int_get (&buf->state) != GST_AUDIO_RING_BUFFER_STATE_STARTED) {
     GST_LOG_OBJECT (self->elem, "ring buffer is not started");
     return;
   }
 
-  if (gst_audio_ring_buffer_prepare_read (buf, &segment, &ringptr, &len)) {
-    b = pw_stream_dequeue_buffer (self->stream);
-    if (!b) {
-      GST_WARNING_OBJECT (self->elem, "no pipewire buffer available");
-      return;
-    }
+  b = pw_stream_dequeue_buffer (self->stream);
+  if (!b) {
+    GST_WARNING_OBJECT (self->elem, "no pipewire buffer available");
+    return;
+  }
 
-    d = &b->buffer->datas[0];
+  d = &b->buffer->datas[0];
+
+  if (self->direction == PW_DIRECTION_OUTPUT) {
+    /* in output mode, always fill the entire spa buffer */
+    offset = d->chunk->offset = 0;
+    size = d->chunk->size = d->maxsize;
+    b->size = size / self->bpf;
+  } else {
+    offset = SPA_MIN (d->chunk->offset, d->maxsize);
+    size = SPA_MIN (d->chunk->size, d->maxsize - offset);
+  }
+
+  do {
+    gst_audio_ring_buffer_prepare_read (buf, &segment, &ringptr, &segsize);
+
+    /* in INPUT (src) mode, it is possible that the skew algorithm
+     * advances the ringbuffer behind our back */
+    if (self->segoffset > 0 && self->cur_segment != segment)
+      self->segoffset = 0;
+
+    copy_size = SPA_MIN (size, segsize - self->segoffset);
 
     if (self->direction == PW_DIRECTION_OUTPUT) {
-      memcpy (d->data, ringptr, len);
-      d->chunk->offset = 0;
-      d->chunk->size = len;
-      b->size = len / self->bpf;
-      gst_audio_ring_buffer_clear (buf, segment);
+      memcpy (((guint8*) d->data) + offset, ringptr + self->segoffset,
+          copy_size);
     } else {
-      uint32_t offset = SPA_MIN (d->chunk->offset, d->maxsize);
-      uint32_t size = SPA_MIN (d->chunk->size, d->maxsize - offset);
-      memcpy (ringptr, ((guint8*) d->data) + offset, size);
+      memcpy (ringptr + self->segoffset, ((guint8*) d->data) + offset,
+          copy_size);
     }
 
-    gst_audio_ring_buffer_advance (buf, 1);
+    remain = size - (segsize - self->segoffset);
 
-    GST_TRACE_OBJECT (self->elem, "processed segment %d", segment);
+    GST_TRACE_OBJECT (self->elem,
+        "seg %d: %s %d bytes remained:%d offset:%d segoffset:%d", segment,
+        self->direction == PW_DIRECTION_INPUT ? "INPUT" : "OUTPUT",
+        copy_size, remain, offset, self->segoffset);
 
-    pw_stream_queue_buffer (self->stream, b);
-  }
+    if (remain >= 0) {
+      offset += (segsize - self->segoffset);
+      size = remain;
+
+      /* write silence on the segment we just read */
+      if (self->direction == PW_DIRECTION_OUTPUT)
+        gst_audio_ring_buffer_clear (buf, segment);
+
+      /* notify that we have read a complete segment */
+      gst_audio_ring_buffer_advance (buf, 1);
+      self->segoffset = 0;
+    } else {
+      self->segoffset += size;
+      self->cur_segment = segment;
+    }
+  } while (remain > 0);
+
+  pw_stream_queue_buffer (self->stream, b);
 }
 
 static const struct pw_stream_events stream_events = {
@@ -363,6 +401,8 @@ gst_pw_audio_ring_buffer_acquire (GstAudioRingBuffer *buf,
 
   self->segsize = spec->segsize;
   self->bpf = GST_AUDIO_INFO_BPF (&spec->info);
+  self->rate = GST_AUDIO_INFO_RATE (&spec->info);
+  self->segoffset = 0;
 
   /* connect stream */
 
@@ -377,7 +417,9 @@ gst_pw_audio_ring_buffer_acquire (GstAudioRingBuffer *buf,
   if (pw_stream_connect (self->stream,
           self->direction,
           self->props->path ? (uint32_t)atoi(self->props->path) : SPA_ID_INVALID,
-          PW_STREAM_FLAG_AUTOCONNECT | PW_STREAM_FLAG_MAP_BUFFERS,
+          PW_STREAM_FLAG_AUTOCONNECT |
+          PW_STREAM_FLAG_MAP_BUFFERS |
+          PW_STREAM_FLAG_RT_PROCESS,
           params, 1) < 0)
     goto start_error;
 
@@ -440,9 +482,24 @@ gst_pw_audio_ring_buffer_delay (GstAudioRingBuffer *buf)
   GstPwAudioRingBuffer *self = GST_PW_AUDIO_RING_BUFFER (buf);
   struct pw_time t;
 
-  if (self->stream) {
-    if (pw_stream_get_time (self->stream, &t) == 0)
-      return t.queued;
+  if (!self->stream || pw_stream_get_time (self->stream, &t) < 0)
+    return 0;
+
+  if (self->direction == PW_DIRECTION_OUTPUT) {
+    /* on output streams, we set the pw_buffer.size in frames,
+       so no conversion is necessary */
+    return t.queued;
+  } else {
+    /* on input streams, pw_buffer.size is set by pw_stream in ticks,
+       so we need to convert it to frames and also add segoffset, which
+       is the number of bytes we have read but not advertised yet, as
+       the segment is incomplete */
+    if (t.rate.denom > 0)
+      return
+        gst_util_uint64_scale (t.queued, self->rate * t.rate.num, t.rate.denom)
+        + self->segoffset / self->bpf;
+    else
+      return self->segoffset / self->bpf;
   }
 
   return 0;
