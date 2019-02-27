@@ -79,10 +79,12 @@ static int emit_source_node(struct impl *this)
 
 	if (device->connected_profiles & SPA_BT_PROFILE_A2DP_SOURCE)
 		profile = SPA_BT_PROFILE_A2DP_SOURCE;
+#if 0
 	else if (device->connected_profiles & SPA_BT_PROFILE_HSP_HS)
 		profile = SPA_BT_PROFILE_HSP_HS;
 	else if (device->connected_profiles & SPA_BT_PROFILE_HFP_HF)
 		profile = SPA_BT_PROFILE_HFP_HF;
+#endif
 	else {
 		return -ENODEV;
 	}
@@ -117,10 +119,12 @@ static int emit_sink_node(struct impl *this)
 
 	if (device->connected_profiles & SPA_BT_PROFILE_A2DP_SINK)
 		profile = SPA_BT_PROFILE_A2DP_SINK;
+#if 0
 	else if (device->connected_profiles & SPA_BT_PROFILE_HSP_AG)
 		profile = SPA_BT_PROFILE_HSP_AG;
 	else if (device->connected_profiles & SPA_BT_PROFILE_HFP_AG)
 		profile = SPA_BT_PROFILE_HFP_AG;
+#endif
 	else {
 		return -ENODEV;
 	}
