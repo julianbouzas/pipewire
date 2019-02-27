@@ -42,6 +42,7 @@
 
 #define MAX_DEVICES	64
 
+extern const struct spa_handle_factory spa_a2dp_source_factory;
 extern const struct spa_handle_factory spa_a2dp_sink_factory;
 
 static const char default_device[] = "";
@@ -70,7 +71,45 @@ struct impl {
 	struct spa_bt_device *bt_dev;
 };
 
-static int emit_nodes(struct impl *this)
+static int emit_source_node(struct impl *this)
+{
+	struct spa_dict_item items[1];
+	struct spa_bt_transport *t;
+	struct spa_bt_device *device = this->bt_dev;
+	enum spa_bt_profile profile;
+
+	if (device->connected_profiles & SPA_BT_PROFILE_A2DP_SOURCE)
+		profile = SPA_BT_PROFILE_A2DP_SOURCE;
+	else if (device->connected_profiles & SPA_BT_PROFILE_HSP_HS)
+		profile = SPA_BT_PROFILE_HSP_HS;
+	else if (device->connected_profiles & SPA_BT_PROFILE_HFP_HF)
+		profile = SPA_BT_PROFILE_HFP_HF;
+	else {
+		return -ENODEV;
+	}
+
+	spa_list_for_each(t, &device->transport_list, device_link) {
+		if (t->profile == profile) {
+			struct spa_device_object_info info;
+			char transport[16];
+
+			snprintf(transport, 16, "%p", t);
+			items[0] = SPA_DICT_ITEM_INIT("bluez5.transport", transport);
+
+			info = SPA_DEVICE_OBJECT_INFO_INIT();
+			info.type = SPA_TYPE_INTERFACE_Node;
+			info.factory = &spa_a2dp_source_factory;
+			info.change_mask = SPA_DEVICE_OBJECT_CHANGE_MASK_INFO;
+			info.info = &SPA_DICT_INIT_ARRAY(items);
+
+			this->callbacks->object_info(this->callbacks_data, 0, &info);
+			break;
+		}
+	}
+	return 0;
+}
+
+static int emit_sink_node(struct impl *this)
 {
 	struct spa_dict_item items[1];
 	struct spa_bt_transport *t;
@@ -84,10 +123,8 @@ static int emit_nodes(struct impl *this)
 	else if (device->connected_profiles & SPA_BT_PROFILE_HFP_AG)
 		profile = SPA_BT_PROFILE_HFP_AG;
 	else {
-		spa_log_warn(this->log, "no profile available");
 		return -ENODEV;
 	}
-
 
 	spa_list_for_each(t, &device->transport_list, device_link) {
 		if (t->profile == profile) {
@@ -107,8 +144,20 @@ static int emit_nodes(struct impl *this)
 			break;
 		}
 	}
-
 	return 0;
+}
+
+static int emit_nodes(struct impl *this)
+{
+	int sink, src;
+
+	sink = emit_sink_node(this);
+	src = emit_source_node(this);
+
+	if (sink == -ENODEV && src == -ENODEV)
+		spa_log_warn(this->log, "no profile available");
+
+	return SPA_MAX(sink, src);
 }
 
 static const struct spa_dict_item info_items[] = {
