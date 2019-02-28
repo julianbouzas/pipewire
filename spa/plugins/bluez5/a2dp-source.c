@@ -320,6 +320,8 @@ static void a2dp_on_ready_read(struct spa_source *source)
 	struct impl *this = source->data;
 	ssize_t r;
 
+	spa_log_debug(this->log, "a2dp-source READ");
+
 	if ((source->rmask & SPA_IO_IN) == 0) {
 		spa_log_error(this->log, "source error, rmask=%d", source->rmask);
 		goto stop;

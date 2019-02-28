@@ -1908,10 +1908,10 @@ static void interface_added(struct spa_bt_monitor *monitor,
 		adapter_register_endpoints(a);
 	}
 	else if (strcmp(interface_name, BLUEZ_PROFILE_MANAGER_INTERFACE) == 0) {
-		register_profile(monitor, PROFILE_HSP_AG, SPA_BT_UUID_HSP_AG);
-		register_profile(monitor, PROFILE_HSP_HS, SPA_BT_UUID_HSP_HS);
-		register_profile(monitor, PROFILE_HFP_AG, SPA_BT_UUID_HFP_AG);
-		register_profile(monitor, PROFILE_HFP_HS, SPA_BT_UUID_HFP_HF);
+		// register_profile(monitor, PROFILE_HSP_AG, SPA_BT_UUID_HSP_AG);
+		// register_profile(monitor, PROFILE_HSP_HS, SPA_BT_UUID_HSP_HS);
+		// register_profile(monitor, PROFILE_HFP_AG, SPA_BT_UUID_HFP_AG);
+		// register_profile(monitor, PROFILE_HFP_HS, SPA_BT_UUID_HFP_HF);
 	}
 	else if (strcmp(interface_name, BLUEZ_DEVICE_INTERFACE) == 0) {
 		struct spa_bt_device *d;
