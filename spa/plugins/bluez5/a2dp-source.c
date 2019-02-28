@@ -615,7 +615,7 @@ impl_node_port_enum_params(struct spa_node *node,
 								this->props.min_latency * this->frame_size,
 								this->props.min_latency * this->frame_size,
 								INT32_MAX),
-			SPA_PARAM_BUFFERS_stride,  SPA_POD_Int(0),
+			SPA_PARAM_BUFFERS_stride,  SPA_POD_Int(this->frame_size),
 			SPA_PARAM_BUFFERS_align,   SPA_POD_Int(16));
 		break;
 
