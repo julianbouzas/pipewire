@@ -49,6 +49,8 @@ GST_STATIC_PAD_TEMPLATE ("sink",
     GST_PAD_SINK,
     GST_PAD_ALWAYS,
     GST_STATIC_CAPS (GST_AUDIO_CAPS_MAKE (GST_AUDIO_NE (F32))
+                     ", rate = (int)44100"
+                     ", channels = (int)2"
                      ", layout = (string)\"interleaved\"")
 );
 
