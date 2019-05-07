@@ -363,6 +363,67 @@ copy_properties (GQuark field_id, const GValue *value, gpointer user_data)
   return TRUE;
 }
 
+static enum spa_audio_format
+gst_audio_info_to_pw_audio_format (GstAudioInfo *info) {
+  /* get the format and layout */
+  const GstAudioFormat format = info->finfo->format;
+  const GstAudioLayout layout = GST_AUDIO_INFO_LAYOUT(info);
+
+  /* return the specific pipewire format */
+  switch (format) {
+  /* Float 32 bits */
+  case GST_AUDIO_FORMAT_F32BE:
+    return layout == GST_AUDIO_LAYOUT_INTERLEAVED ? SPA_AUDIO_FORMAT_F32_BE : SPA_AUDIO_FORMAT_F32P;
+  case GST_AUDIO_FORMAT_F32LE:
+    if (layout != GST_AUDIO_LAYOUT_INTERLEAVED) {
+      GST_ERROR ("There is no GST_AUDIO_FORMAT_F32_LE planar format in pipewire");
+      break;
+    }
+    return SPA_AUDIO_FORMAT_F32_LE;
+
+  /* Signed 32 bits */
+  case GST_AUDIO_FORMAT_S32BE:
+    return layout == GST_AUDIO_LAYOUT_INTERLEAVED ? SPA_AUDIO_FORMAT_S32_BE : SPA_AUDIO_FORMAT_S32P;
+  case GST_AUDIO_FORMAT_S32LE:
+    if (layout != GST_AUDIO_LAYOUT_INTERLEAVED) {
+      GST_ERROR ("There is no GST_AUDIO_FORMAT_S32LE planar format in pipewire");
+      break;
+    }
+    return SPA_AUDIO_FORMAT_S32_LE;
+
+  /* Unsigned 32 bits */
+  case GST_AUDIO_FORMAT_U32BE:
+    if (layout != GST_AUDIO_LAYOUT_INTERLEAVED) {
+      GST_ERROR ("There is no GST_AUDIO_FORMAT_U32BE planar format in pipewire");
+      break;
+    }
+    return SPA_AUDIO_FORMAT_U32_BE;
+  case GST_AUDIO_FORMAT_U32LE:
+    if (layout != GST_AUDIO_LAYOUT_INTERLEAVED) {
+      GST_ERROR ("There is no GST_AUDIO_FORMAT_U32_LE planar format in pipewire");
+      break;
+    }
+    return SPA_AUDIO_FORMAT_U32_LE;
+
+  /* Signed 16 bits */
+  case GST_AUDIO_FORMAT_S16BE:
+    return layout == GST_AUDIO_LAYOUT_INTERLEAVED ? SPA_AUDIO_FORMAT_S16_BE : SPA_AUDIO_FORMAT_S16P;
+  case GST_AUDIO_FORMAT_S16LE:
+    if (layout != GST_AUDIO_LAYOUT_INTERLEAVED) {
+      GST_ERROR ("There is no GST_AUDIO_FORMAT_S16LE planar format in pipewire");
+      break;
+    }
+    return SPA_AUDIO_FORMAT_S16_LE;
+
+  /* TODO: Handle other formats here */
+  default:
+    GST_ERROR ("Format not supported");
+    break;
+  }
+
+  return SPA_AUDIO_FORMAT_UNKNOWN;
+}
+
 static gboolean
 gst_pw_audio_ring_buffer_acquire (GstAudioRingBuffer *buf,
     GstAudioRingBufferSpec *spec)
@@ -378,7 +439,6 @@ gst_pw_audio_ring_buffer_acquire (GstAudioRingBuffer *buf,
   g_return_val_if_fail (!self->stream, TRUE); /* already acquired */
 
   g_return_val_if_fail (spec->type == GST_AUDIO_RING_BUFFER_FORMAT_TYPE_RAW, FALSE);
-  g_return_val_if_fail (GST_AUDIO_INFO_IS_FLOAT (&spec->info), FALSE);
 
   GST_DEBUG_OBJECT (self->elem, "acquire");
 
@@ -396,7 +456,7 @@ gst_pw_audio_ring_buffer_acquire (GstAudioRingBuffer *buf,
       SPA_TYPE_OBJECT_Format,    SPA_PARAM_EnumFormat,
       SPA_FORMAT_mediaType,      SPA_POD_Id (SPA_MEDIA_TYPE_audio),
       SPA_FORMAT_mediaSubtype,   SPA_POD_Id (SPA_MEDIA_SUBTYPE_raw),
-      SPA_FORMAT_AUDIO_format,   SPA_POD_Id (SPA_AUDIO_FORMAT_F32),
+      SPA_FORMAT_AUDIO_format,   SPA_POD_Id (gst_audio_info_to_pw_audio_format (&spec->info)),
       SPA_FORMAT_AUDIO_rate,     SPA_POD_Int (GST_AUDIO_INFO_RATE (&spec->info)),
       SPA_FORMAT_AUDIO_channels, SPA_POD_Int (GST_AUDIO_INFO_CHANNELS (&spec->info)));
 
