@@ -647,6 +647,8 @@ static const struct spa_type_info type_info[] = {
 	{ PW_TYPE_INTERFACE_Module, SPA_TYPE_Pointer, PW_TYPE_INFO_INTERFACE_BASE "Module", NULL },
 	{ PW_TYPE_INTERFACE_ClientNode, SPA_TYPE_Pointer, PW_TYPE_INFO_INTERFACE_BASE "ClientNode", NULL },
 	{ PW_TYPE_INTERFACE_Device, SPA_TYPE_Pointer, PW_TYPE_INFO_INTERFACE_BASE "Device", NULL },
+	{ PW_TYPE_INTERFACE_Endpoint, SPA_TYPE_Pointer, PW_TYPE_INFO_INTERFACE_BASE "Endpoint", NULL},
+	{ PW_TYPE_INTERFACE_ClientEndpoint, SPA_TYPE_Pointer, PW_TYPE_INFO_INTERFACE_BASE "ClientEndpoint", NULL},
 	{ SPA_ID_INVALID, SPA_ID_INVALID, "spa_types", spa_types },
 	{ 0, 0, NULL, NULL },
 };
