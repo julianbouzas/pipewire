@@ -38,6 +38,8 @@
 #include <pipewire/type.h>
 #include <pipewire/permission.h>
 
+#include <extensions/endpoint.h>
+
 static const char WHITESPACE[] = " \t";
 
 struct remote_data;
@@ -176,8 +178,12 @@ static void print_params(struct spa_param_info *params, uint32_t n_params, char 
 		return;
 	}
 	for (i = 0; i < n_params; i++) {
+		const struct spa_type_info *type_info = spa_type_param;
+		if (params[i].id >= PW_ENDPOINT_PARAM_EnumControl)
+			type_info = endpoint_param_type_info;
+
 		fprintf(stdout, "%c\t  %d (%s) %c%c\n", mark, params[i].id,
-			spa_debug_type_find_name(spa_type_param, params[i].id),
+			spa_debug_type_find_name(type_info, params[i].id),
 			params[i].flags & SPA_PARAM_INFO_READ ? 'r' : '-',
 			params[i].flags & SPA_PARAM_INFO_WRITE ? 'w' : '-');
 	}
@@ -641,6 +647,16 @@ static void info_device(struct proxy_data *pd)
 	info->change_mask = 0;
 }
 
+static void info_endpoint(struct proxy_data *pd)
+{
+	struct pw_endpoint_info *info = pd->info;
+
+	info_global(pd);
+	print_properties(info->props, MARK_CHANGE(1), true);
+	print_params(info->params, info->n_params, MARK_CHANGE(0), true);
+	info->change_mask = 0;
+}
+
 static void core_event_info(void *object, const struct pw_core_info *info)
 {
 	struct proxy_data *pd = object;
@@ -708,6 +724,9 @@ static void event_param(void *object, int seq, uint32_t id,
 
 	if (spa_pod_is_object_type(param, SPA_TYPE_OBJECT_Format))
 		spa_debug_format(2, NULL, param);
+	else if (spa_pod_is_object_type(param, PW_ENDPOINT_OBJECT_ParamControl) ||
+		 spa_pod_is_object_type(param, PW_ENDPOINT_OBJECT_ParamStream))
+		spa_debug_pod(2, endpoint_param_object_type_info, param);
 	else
 		spa_debug_pod(2, NULL, param);
 }
@@ -842,6 +861,53 @@ static const struct pw_device_proxy_events device_events = {
 	.param = event_param
 };
 
+static void endpoint_info_free(struct pw_endpoint_info *info)
+{
+	free(info->params);
+	if (info->props)
+		pw_properties_free ((struct pw_properties *)info->props);
+	free(info);
+}
+
+static void endpoint_event_info(void *object,
+				const struct pw_endpoint_info *update)
+{
+	struct proxy_data *pd = object;
+	struct remote_data *rd = pd->rd;
+	struct pw_endpoint_info *info = pd->info;
+
+	if (!info) {
+		info = pd->info = calloc(1, sizeof(*info));
+		info->id = update->id;
+	}
+	if (update->change_mask & PW_ENDPOINT_CHANGE_MASK_PARAMS) {
+		info->n_params = update->n_params;
+		free(info->params);
+		info->params = malloc(info->n_params * sizeof(struct spa_param_info));
+		memcpy(info->params, update->params,
+			info->n_params * sizeof(struct spa_param_info));
+	}
+	if (update->change_mask & PW_ENDPOINT_CHANGE_MASK_PROPS) {
+		if (info->props)
+			pw_properties_free ((struct pw_properties *)info->props);
+		info->props =
+			(struct spa_dict *) pw_properties_new_dict (update->props);
+	}
+
+	if (pd->global == NULL)
+		pd->global = pw_map_lookup(&rd->globals, info->id);
+	if (pd->global && pd->global->info_pending) {
+		info_endpoint(pd);
+		pd->global->info_pending = false;
+	}
+}
+
+static const struct pw_endpoint_proxy_events endpoint_events = {
+	PW_VERSION_ENDPOINT_PROXY_EVENTS,
+	.info = endpoint_event_info,
+	.param = event_param
+};
+
 static void
 destroy_proxy (void *data)
 {
@@ -927,6 +993,12 @@ static bool bind_global(struct remote_data *rd, struct global *global, char **er
 		client_version = PW_VERSION_LINK;
 		destroy = (pw_destroy_t) pw_link_info_free;
 		info_func = info_link;
+		break;
+	case PW_TYPE_INTERFACE_Endpoint:
+		events = &endpoint_events;
+		client_version = PW_VERSION_ENDPOINT;
+		destroy = (pw_destroy_t) endpoint_info_free;
+		info_func = info_endpoint;
 		break;
 	default:
 		asprintf(error, "unsupported type %s", spa_debug_type_find_name(pw_type_info(), global->type));
@@ -1199,6 +1271,10 @@ static bool do_enum_params(struct data *data, const char *cmd, char *args, char 
 		break;
 	case PW_TYPE_INTERFACE_Device:
 		pw_device_proxy_enum_params((struct pw_device_proxy*)global->proxy, 0,
+			param_id, 0, 0, NULL);
+		break;
+	case PW_TYPE_INTERFACE_Endpoint:
+		pw_endpoint_proxy_enum_params((struct pw_endpoint_proxy*)global->proxy, 0,
 			param_id, 0, 0, NULL);
 		break;
 	default:
