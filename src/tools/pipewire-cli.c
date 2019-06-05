@@ -210,6 +210,7 @@ static bool do_export_node(struct data *data, const char *cmd, char *args, char 
 static bool do_enum_params(struct data *data, const char *cmd, char *args, char **error);
 static bool do_permissions(struct data *data, const char *cmd, char *args, char **error);
 static bool do_get_permissions(struct data *data, const char *cmd, char *args, char **error);
+static bool do_endpoint_control(struct data *data, const char *cmd, char *args, char **error);
 
 static struct command command_list[] = {
 	{ "help", "Show this help", do_help },
@@ -228,6 +229,7 @@ static struct command command_list[] = {
 	{ "enum-params", "Enumerate params of an object <object-id> [<param-id-name>]", do_enum_params },
 	{ "permissions", "Set permissions for a client <client-id> <permissions>", do_permissions },
 	{ "get-permissions", "Get permissions of a client <client-id>", do_get_permissions },
+	{ "endpoint-control", "Set control value on an endpoint <object-id> <control-id> <type: b|i|l|d> <value>", do_endpoint_control },
 };
 
 static bool do_help(struct data *data, const char *cmd, char *args, char **error)
@@ -1353,6 +1355,90 @@ static bool do_get_permissions(struct data *data, const char *cmd, char *args, c
 	}
 	pw_client_proxy_get_permissions((struct pw_client_proxy*)global->proxy,
 			0, UINT32_MAX);
+
+	return true;
+}
+
+static bool do_endpoint_control(struct data *data, const char *cmd, char *args, char **error)
+{
+	struct remote_data *rd = data->current;
+	int n;
+	char *a[4];
+	uint32_t id, control_id;
+	struct global *global;
+	char buffer[1024];
+	struct spa_pod_builder b;
+	struct spa_pod_frame f;
+	struct spa_pod *param;
+
+	n = pw_split_ip(args, WHITESPACE, 4, a);
+	if (n < 4) {
+		asprintf(error, "%s <object-id> <control-id> <type: b|i|l|d> <value>", cmd);
+		return false;
+	}
+
+	id = atoi(a[0]);
+	global = pw_map_lookup(&rd->globals, id);
+	if (global == NULL) {
+		asprintf(error, "%s: unknown global %d", cmd, id);
+		return false;
+	}
+	if (global->type != PW_TYPE_INTERFACE_Endpoint) {
+		asprintf(error, "object %d is not an endpoint", atoi(a[0]));
+		return false;
+	}
+	if (global->proxy == NULL) {
+		if (!bind_global(rd, global, error))
+			return false;
+	}
+
+	control_id = atoi(a[1]);
+
+	spa_pod_builder_init(&b, buffer, 1024);
+	spa_pod_builder_push_object (&b, &f,
+		PW_ENDPOINT_OBJECT_ParamControl, PW_ENDPOINT_PARAM_Control);
+	spa_pod_builder_add(&b,
+		PW_ENDPOINT_PARAM_CONTROL_id, SPA_POD_Int(control_id),
+		NULL);
+
+	switch (*a[2]) {
+	case 'b': {
+		bool val = atoi(a[3]);
+		spa_pod_builder_add(&b,
+			PW_ENDPOINT_PARAM_CONTROL_value, SPA_POD_Bool(val),
+			NULL);
+		break;
+	}
+	case 'i': {
+		int val = atoi(a[3]);
+		spa_pod_builder_add(&b,
+			PW_ENDPOINT_PARAM_CONTROL_value, SPA_POD_Int(val),
+			NULL);
+		break;
+	}
+	case 'l': {
+		int64_t val = strtoll(a[3], NULL, 10);
+		spa_pod_builder_add(&b,
+			PW_ENDPOINT_PARAM_CONTROL_value, SPA_POD_Long(val),
+			NULL);
+		break;
+	}
+	case 'd': {
+		double val = strtod(a[3], NULL);
+		spa_pod_builder_add(&b,
+			PW_ENDPOINT_PARAM_CONTROL_value, SPA_POD_Double(val),
+			NULL);
+		break;
+	}
+	default:
+		asprintf(error, "%s: unknown value type %s", cmd, a[2]);
+		return false;
+	}
+
+	param = spa_pod_builder_pop(&b, &f);
+
+	pw_endpoint_proxy_set_param((struct pw_endpoint_proxy *) global->proxy,
+		PW_ENDPOINT_PARAM_Control, 0, param);
 
 	return true;
 }
