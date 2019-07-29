@@ -338,7 +338,7 @@ static int port_enum_formats(struct spa_node *node,
 			if (other->have_format)
 				info = other->format;
 			else
-				info.info.raw.format = SPA_AUDIO_FORMAT_S16;
+				info.info.raw.format = SPA_AUDIO_FORMAT_F32;
 
 			if (info.info.raw.format == SPA_AUDIO_FORMAT_F32P ||
 			    info.info.raw.format == SPA_AUDIO_FORMAT_F32) {
