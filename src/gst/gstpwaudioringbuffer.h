@@ -64,7 +64,6 @@ struct _GstPwAudioRingBuffer
   gint segsize;
   gint bpf;
   gint rate;
-  gint channels;
 
   /* on_stream_process() state */
   gint segoffset;
