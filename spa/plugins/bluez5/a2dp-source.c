@@ -761,10 +761,7 @@ impl_node_port_enum_params(void *object, int seq,
 		return -ENOENT;
 	}
 
-	/* TODO: why filer is != NULL when linking it with a2dp-sink? */
-	/* if filter is null a2dp-source cannot be linked with a2dp-sink,
-	 * so for now we always pass NULL */
-	if (spa_pod_filter(&b, &result.param, param, NULL) < 0)
+	if (spa_pod_filter(&b, &result.param, param, filter) < 0)
 		goto next;
 
 	spa_node_emit_result(&this->hooks, seq, 0, SPA_RESULT_TYPE_NODE_PARAMS, &result);
