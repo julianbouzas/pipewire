@@ -1221,8 +1221,8 @@ static void on_state_changed(void *_data, enum pw_remote_state old, enum pw_remo
                                                &impl->registry_listener,
                                                &registry_events, impl);
 		bluez5_start_monitor(impl, &impl->bluez5_monitor);
-		alsa_start_monitor(impl, &impl->alsa_monitor);
-		v4l2_start_monitor(impl, &impl->v4l2_monitor);
+		// alsa_start_monitor(impl, &impl->alsa_monitor);
+		// v4l2_start_monitor(impl, &impl->v4l2_monitor);
 
 		schedule_rescan(impl);
 		break;
