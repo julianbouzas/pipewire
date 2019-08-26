@@ -121,6 +121,8 @@ struct impl {
 	uint8_t buffer_read[4096];
 	struct timespec now;
 	uint32_t sample_count;
+
+	double accumulator;
 };
 
 #define NAME "a2dp-source"
@@ -298,6 +300,29 @@ static void reset_buffers(struct port *port)
 	}
 }
 
+#include <math.h>
+#define M_PI_M2 ( M_PI + M_PI )
+static void fill_s16(struct impl *this, void *dest, int avail)
+{
+	int16_t *dst = dest;
+	int n_samples = avail / (sizeof(int16_t) * 1);
+	int i;
+	uint32_t c;
+
+        for (i = 0; i < n_samples; i++) {
+                int16_t val;
+
+                this->accumulator += M_PI_M2 * 440 / 44100;
+                if (this->accumulator >= M_PI_M2)
+                        this->accumulator -= M_PI_M2;
+
+                val = (int16_t) (sin(this->accumulator) * 32767.0);
+
+                for (c = 0; c < 1; c++)
+                        *dst++ = val;
+        }
+}
+
 static void decode_sbc_data(struct impl *this, uint8_t *src, size_t src_size)
 {
 	const ssize_t header_size = sizeof(struct rtp_header) + sizeof(struct rtp_payload);
@@ -356,7 +381,11 @@ static void decode_sbc_data(struct impl *this, uint8_t *src, size_t src_size)
 		}
 
 		/* make sure all data has been decoded */
-		spa_assert(src_size <= 0);
+		// spa_assert(src_size <= 0);
+
+		// printf ("[%d] Writting %d bytes... ", buffer->id, data[0].maxsize);
+		// fill_s16 (this, data[0].data, data[0].maxsize);
+		printf ("Done\n");
 
 		/* set the decoded data */
 		data[0].chunk->offset = 0;
@@ -432,7 +461,7 @@ again:
 	}
 
 	/* make sure size_read is not bigger than the buffer_size */
-	spa_assert(size_read <= buffer_size);
+	// spa_assert(size_read <= buffer_size);
 
 	/* decode the data */
 	decode_sbc_data(this, this->buffer_read, size_read);
@@ -697,10 +726,16 @@ impl_node_port_enum_params(void *object, int seq,
 		switch (this->transport->codec) {
 		case A2DP_CODEC_SBC:
 		{
+#if 0
 			a2dp_sbc_t *config = this->transport->configuration;
+#endif
 			struct spa_audio_info_raw info = { 0, };
 
 			info.format = SPA_AUDIO_FORMAT_S16;
+			info.channels = 1;
+			info.position[0] = SPA_AUDIO_CHANNEL_MONO;
+			info.rate = 44100;
+#if 0
 			if ((info.rate = a2dp_sbc_get_frequency(config)) < 0)
 				return -EIO;
 			if ((info.channels = a2dp_sbc_get_channels(config)) < 0)
@@ -717,6 +752,7 @@ impl_node_port_enum_params(void *object, int seq,
 			default:
 				return -EIO;
 			}
+#endif
 
 			param = spa_format_audio_raw_build(&b, id, &info);
 			break;
@@ -819,7 +855,10 @@ static int port_set_format(struct impl *this, struct port *port,
 		if (spa_format_audio_raw_parse(format, &info.info.raw) < 0)
 			return -EINVAL;
 
+		port->frame_size = 1 * 2;
+#if 0
 		port->frame_size = info.info.raw.channels * 2;
+#endif
 		port->current_format = info;
 		port->have_format = true;
 	}
@@ -829,7 +868,10 @@ static int port_set_format(struct impl *this, struct port *port,
 		port->info.change_mask |= SPA_PORT_CHANGE_MASK_FLAGS;
 		port->info.flags = SPA_PORT_FLAG_LIVE;
 		port->info.change_mask |= SPA_PORT_CHANGE_MASK_RATE;
+		port->info.rate = SPA_FRACTION(1, 44100);
+#if 0
 		port->info.rate = SPA_FRACTION(1, port->current_format.info.raw.rate);
+#endif
 		port->params[3] = SPA_PARAM_INFO(SPA_PARAM_Format, SPA_PARAM_INFO_READWRITE);
 		port->params[4] = SPA_PARAM_INFO(SPA_PARAM_Buffers, SPA_PARAM_INFO_READ);
 	} else {
